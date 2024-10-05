@@ -9,8 +9,9 @@ async def main():
     await econ.message("Hello, world!")
     while True:
         message = await econ.read()
-        if message is not None:
-            print(message.decode()[:-3])
+        if message is None:
+            continue
+        print(message.decode()[:-3])
 
 
 asyncio.run(main())
