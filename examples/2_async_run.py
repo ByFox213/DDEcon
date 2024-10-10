@@ -1,10 +1,11 @@
 import asyncio
+import os
 
 from ddecon import AsyncECON
 
 
 async def main():
-    econ = AsyncECON("127.0.0.1", 12345, "password")
+    econ = AsyncECON(os.getenv("econ_ip"), int(os.getenv("econ_port")), os.getenv("econ_password"))
     await econ.connect()
     await econ.message("Hello, world!")
     while True:
