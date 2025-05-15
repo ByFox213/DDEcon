@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="ddecon",
-    version="0.2.1",
+    version="0.2.2",
     author="ByFox",
     description="DDnet econ",
     long_description=long_description,

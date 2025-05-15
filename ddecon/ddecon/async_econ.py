@@ -23,6 +23,7 @@ class AsyncECON(ECON):
         self.reader = None
         self.writer = None
         self.queue = asyncio.Queue()
+        self._lock = asyncio.Lock()
 
     async def is_connected(self) -> bool:
         return self.connected
@@ -32,25 +33,26 @@ class AsyncECON(ECON):
             raise AlreadyConnectedError("econ: already connected")
 
         try:
-            await asyncio.create_task(self._connect())
+            await self._connect()
         except asyncio.CancelledError:
             raise AlreadyConnectedError("econ: already connected")
 
     async def _connect(self) -> None:
-        self.reader, self.writer = await asyncio.open_connection(self.ip, self.port)
+        async with self._lock:
+            self.reader, self.writer = await asyncio.open_connection(self.ip, self.port)
 
-        # read out useless info
-        try:
-            await asyncio.wait_for(self.reader.read(1024), timeout=2)
-        except asyncio.TimeoutError:
-            raise ECONError(f"Timeout to {self.ip}")
-        except socket.error as e:
-            self.writer.close()
-            raise e
+            # read out useless info
+            try:
+                await asyncio.wait_for(self.reader.read(1024), timeout=2)
+            except asyncio.TimeoutError:
+                raise ECONError(f"Timeout to {self.ip}")
+            except socket.error as e:
+                self.writer.close()
+                raise e
 
-        await asyncio.gather(*[self._send_password(), self._read_response()])
+            await asyncio.gather(self._send_password(), self._read_response())
 
-        self.connected = True
+            self.connected = True
 
     async def _send_password(self) -> None:
         try:
@@ -91,11 +93,12 @@ class AsyncECON(ECON):
         if not self.connected:
             raise DisconnectedError("econ: disconnected")
 
-        try:
-            self.writer.write(buf + b"\n")
-            await self.writer.drain()
-        except socket.error as e:
-            raise e
+        async with self._lock:
+            try:
+                self.writer.write(buf + b"\n")
+                await self.writer.drain()
+            except socket.error as e:
+                raise e
 
     async def read(self) -> Union[bytes, None]:
         # "ping" socket
@@ -107,7 +110,7 @@ class AsyncECON(ECON):
         try:
             buffer = await asyncio.wait_for(self.reader.read(8192), timeout=2)
         except socket.timeout:
-            return
+            return None
         except socket.error as e:
             raise e
 
@@ -116,10 +119,8 @@ class AsyncECON(ECON):
     async def message(self, message: str) -> None:
         lines = message.split("\n")
         if len(lines) > 1:
-            await asyncio.gather(
-                *[asyncio.create_task(self._write_message(line)) for line in lines]
-            )
-            return
+            await asyncio.gather(*[self._write_message(line) for line in lines])
+            return None
         return await self._write_message(message)
 
     async def _write_message(self, message: str) -> None:

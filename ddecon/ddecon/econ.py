@@ -19,16 +19,15 @@ class ECON:
         password: str = None,
         auth_message: bytes = None,
     ) -> None:
-        self.connected = False
-        self.conn = None
-        self.ip = ip
-        self.port = port
-        self.auth_message = auth_message
-        if auth_message is None:
-            self.auth_message = b"Authentication successful"
         if password is None:
             raise ValueError("Password is None")
+
         self.password = password
+        self.auth_message = auth_message or b"Authentication successful"
+        self.ip = ip
+        self.port = port
+        self.conn = None
+        self.connected = False
 
     def is_connected(self) -> bool:
         return self.connected
@@ -39,42 +38,16 @@ class ECON:
 
         try:
             self.conn = socket.create_connection((self.ip, self.port), timeout=2)
-        except socket.error as e:
-            raise e
-
-        # read out useless info
-        try:
-            self.conn.recv(1024)
-        except socket.timeout:
-            pass
-        except socket.error as e:
-            self.conn.close()
-            raise e
-        self.conn.settimeout(None)
-
-        try:
+            self.conn.recv(1024)  # read out useless info
             self.conn.sendall(self.password.encode() + b"\n")
-        except socket.error as e:
-            self.conn.close()
-            raise e
-
-        # check authentication
-        self.conn.settimeout(2)
-        try:
             buf = self.conn.recv(1024)
-        except socket.timeout:
-            self.conn.close()
-            raise WrongPasswordError("econ: wrong password")
+            if self.auth_message not in buf:
+                raise WrongPasswordError("econ: wrong password")
+            self.conn.settimeout(None)
+            self.connected = True
         except socket.error as e:
             self.conn.close()
             raise e
-        self.conn.settimeout(None)
-
-        if self.auth_message not in buf:
-            self.conn.close()
-            raise WrongPasswordError("econ: wrong password")
-
-        self.connected = True
 
     def disconnect(self) -> None:
         if not self.connected:
@@ -84,9 +57,9 @@ class ECON:
             self.conn.close()
         except socket.error as e:
             raise e
-
-        self.conn = None
-        self.connected = False
+        finally:
+            self.conn = None
+            self.connected = False
 
     def write(self, buf: bytes) -> None:
         if not self.connected:
@@ -98,9 +71,8 @@ class ECON:
             raise e
 
     def read(self) -> bytes:
-        # "ping" socket
         try:
-            self.write(b"")
+            self.write(b"")  # "ping" socket
         except DisconnectedError:
             raise
 
@@ -114,5 +86,5 @@ class ECON:
         if len(lines) > 1:
             for x in (f'say "> {x}"'.encode() for x in lines):
                 self.write(x)
-            return
-        self.write(f'say "{message}"'.encode())
+        else:
+            self.write(f'say "{message}"'.encode())
