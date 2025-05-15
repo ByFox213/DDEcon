@@ -1,18 +1,23 @@
 import socket
 
-from .exceptions import AlreadyConnected, AlreadyDisconnected, WrongPassword, Disconnected
+from .exceptions import (
+    AlreadyConnectedError,
+    AlreadyDisconnectedError,
+    WrongPasswordError,
+    DisconnectedError,
+)
 
 
-__all__ = ("ECON", )
+__all__ = ("ECON",)
 
 
 class ECON:
     def __init__(
-            self,
-            ip: str,
-            port: int = 8303,
-            password: str = None,
-            auth_message: bytes = None
+        self,
+        ip: str,
+        port: int = 8303,
+        password: str = None,
+        auth_message: bytes = None,
     ) -> None:
         self.connected = False
         self.conn = None
@@ -30,7 +35,7 @@ class ECON:
 
     def connect(self) -> None:
         if self.connected:
-            raise AlreadyConnected("econ: already connected")
+            raise AlreadyConnectedError("econ: already connected")
 
         try:
             self.conn = socket.create_connection((self.ip, self.port), timeout=2)
@@ -59,7 +64,7 @@ class ECON:
             buf = self.conn.recv(1024)
         except socket.timeout:
             self.conn.close()
-            raise WrongPassword("econ: wrong password")
+            raise WrongPasswordError("econ: wrong password")
         except socket.error as e:
             self.conn.close()
             raise e
@@ -67,13 +72,13 @@ class ECON:
 
         if self.auth_message not in buf:
             self.conn.close()
-            raise WrongPassword("econ: wrong password")
+            raise WrongPasswordError("econ: wrong password")
 
         self.connected = True
 
     def disconnect(self) -> None:
         if not self.connected:
-            raise AlreadyDisconnected("econ: already disconnected")
+            raise AlreadyDisconnectedError("econ: already disconnected")
 
         try:
             self.conn.close()
@@ -85,7 +90,7 @@ class ECON:
 
     def write(self, buf: bytes) -> None:
         if not self.connected:
-            raise Disconnected("econ: disconnected")
+            raise DisconnectedError("econ: disconnected")
 
         try:
             self.conn.sendall(buf + b"\n")
@@ -96,7 +101,7 @@ class ECON:
         # "ping" socket
         try:
             self.write(b"")
-        except Disconnected:
+        except DisconnectedError:
             raise
 
         try:
@@ -107,6 +112,7 @@ class ECON:
     def message(self, message) -> None:
         lines = message.split("\n")
         if len(lines) > 1:
-            map(lambda x: self.write(f"say \"> {x}\"".encode()), lines)
+            for x in (f'say "> {x}"'.encode() for x in lines):
+                self.write(x)
             return
-        self.write(f"say \"{message}\"".encode())
+        self.write(f'say "{message}"'.encode())

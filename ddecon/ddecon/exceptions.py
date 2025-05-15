@@ -1,23 +1,28 @@
 class ECONError(Exception):
     """Base class for ECON exceptions."""
+
     pass
 
 
-class AlreadyConnected(ECONError):
+class AlreadyConnectedError(ECONError):
     """Raised when trying to connect an already connected ECON."""
+
     pass
 
 
-class AlreadyDisconnected(ECONError):
+class AlreadyDisconnectedError(ECONError):
     """Raised when trying to disconnect an already disconnected ECON."""
+
     pass
 
 
-class Disconnected(ECONError):
+class DisconnectedError(ECONError):
     """Raised when trying to use a disconnected ECON."""
+
     pass
 
 
-class WrongPassword(ECONError):
+class WrongPasswordError(ECONError):
     """Raised when the password is incorrect."""
+
     pass

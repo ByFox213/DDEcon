@@ -3,14 +3,22 @@ import socket
 from typing import Union
 
 from .econ import ECON
-from .exceptions import AlreadyConnected, AlreadyDisconnected, WrongPassword, Disconnected, ECONError
+from .exceptions import (
+    AlreadyConnectedError,
+    AlreadyDisconnectedError,
+    WrongPasswordError,
+    DisconnectedError,
+    ECONError,
+)
 
 
-__all__ = ("AsyncECON", )
+__all__ = ("AsyncECON",)
 
 
 class AsyncECON(ECON):
-    def __init__(self, ip, port: int = 8303, password: str = None, auth_message: bytes = None) -> None:
+    def __init__(
+        self, ip, port: int = 8303, password: str = None, auth_message: bytes = None
+    ) -> None:
         super().__init__(ip, port, password, auth_message)
         self.reader = None
         self.writer = None
@@ -21,12 +29,12 @@ class AsyncECON(ECON):
 
     async def connect(self) -> None:
         if self.connected:
-            raise AlreadyConnected("econ: already connected")
+            raise AlreadyConnectedError("econ: already connected")
 
         try:
             await asyncio.create_task(self._connect())
         except asyncio.CancelledError:
-            raise AlreadyConnected("econ: already connected")
+            raise AlreadyConnectedError("econ: already connected")
 
     async def _connect(self) -> None:
         self.reader, self.writer = await asyncio.open_connection(self.ip, self.port)
@@ -40,10 +48,7 @@ class AsyncECON(ECON):
             self.writer.close()
             raise e
 
-        await asyncio.gather(*[
-            self._send_password(),
-            self._read_response()
-        ])
+        await asyncio.gather(*[self._send_password(), self._read_response()])
 
         self.connected = True
 
@@ -60,18 +65,18 @@ class AsyncECON(ECON):
             buf = await asyncio.wait_for(self.reader.read(1024), timeout=2)
         except asyncio.TimeoutError:
             self.writer.close()
-            raise WrongPassword("econ: wrong password")
+            raise WrongPasswordError("econ: wrong password")
         except socket.error as e:
             self.writer.close()
             raise e
 
         if self.auth_message not in buf:
             self.writer.close()
-            raise WrongPassword("econ: wrong password")
+            raise WrongPasswordError("econ: wrong password")
 
     async def disconnect(self) -> None:
         if not self.connected:
-            raise AlreadyDisconnected("econ: already disconnected")
+            raise AlreadyDisconnectedError("econ: already disconnected")
 
         try:
             self.writer.close()
@@ -84,7 +89,7 @@ class AsyncECON(ECON):
 
     async def write(self, buf: bytes) -> None:
         if not self.connected:
-            raise Disconnected("econ: disconnected")
+            raise DisconnectedError("econ: disconnected")
 
         try:
             self.writer.write(buf + b"\n")
@@ -96,7 +101,7 @@ class AsyncECON(ECON):
         # "ping" socket
         try:
             await self.write(b"")
-        except Disconnected:
+        except DisconnectedError:
             raise
 
         try:
@@ -111,15 +116,14 @@ class AsyncECON(ECON):
     async def message(self, message: str) -> None:
         lines = message.split("\n")
         if len(lines) > 1:
-            await asyncio.gather(*[
-                asyncio.create_task(self._write_message(line))
-                for line in lines
-            ])
+            await asyncio.gather(
+                *[asyncio.create_task(self._write_message(line)) for line in lines]
+            )
             return
         return await self._write_message(message)
 
     async def _write_message(self, message: str) -> None:
         try:
-            await self.write(f"say \"{message}\"".encode())
-        except Disconnected:
+            await self.write(f'say "{message}"'.encode())
+        except DisconnectedError:
             raise
